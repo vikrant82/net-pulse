@@ -349,24 +349,17 @@ curl http://localhost:8000/api/traffic/latest
 ```mermaid
 graph TD
     A[Application Startup] --> B[Auto-Detection Phase]
-    B --> C[Discover Interfaces<br/>psutil.net_if_addrs()]
+    B --> C[Discover Interfaces<br/>System Call]
     C --> D[Activity Analysis<br/>2s per interface]
-    D --> E[Primary Interface<br/>Traffic-based selection]
-    E --> F[Configuration Storage<br/>Database population]
-
+    D --> E[Primary Interface<br/>Selection]
+    E --> F[Configuration Storage<br/>Database]
+    
     F --> G[Background Collection<br/>Every 30 seconds]
-    G --> H[Multi-Interface Stats<br/>24 interfaces parallel]
+    G --> H[Multi-Interface Stats<br/>n interfaces]
     H --> I[Delta Calculation<br/>Current vs Previous]
-    I --> J[Counter Rollover<br/>64-bit overflow handling]
-    J --> K[Database Storage<br/>Indexed SQLite tables]
-    K --> L[API Endpoints<br/>Real-time data access]
-```
-
-**Alternative Text-Based Flow:**
-```
-Application Startup → Auto-Detection Phase → Interface Discovery → Activity Analysis → Primary Selection → Configuration Storage
-                                    ↓
-Background Collection (30s) → Multi-Interface Stats → Delta Calculation → Rollover Handling → Database Storage → API Access
+    I --> J[Counter Rollover<br/>64-bit handling]
+    J --> K[Database Storage<br/>Indexed tables]
+    K --> L[API Endpoints<br/>Data access]
 ```
 
 ### Core Components
