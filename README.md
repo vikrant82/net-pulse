@@ -42,29 +42,94 @@ Net-Pulse provides real-time network interface discovery, traffic monitoring, an
 ### Installation
 
 1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd net-pulse
-   ```
+    ```bash
+    git clone <repository-url>
+    cd net-pulse
+    ```
 
-2. **Install dependencies**
-   ```bash
-   pip install -e .
-   ```
+2. **Set up virtual environment (Recommended)**
+    ```bash
+    # Option A: Use the automated setup script
+    ./setup_test_env.sh
+
+    # Option B: Manual setup
+    python3 -m venv venv
+    source venv/bin/activate  # On Windows: venv\Scripts\activate
+    pip install -e .
+    ```
 
 3. **Run the application**
-   ```bash
-   net-pulse
-   ```
+    ```bash
+    # If using virtual environment
+    source venv/bin/activate  # On Windows: venv\Scripts\activate
+    net-pulse
+
+    # Or run directly with Python
+    python3 -m netpulse.main
+    ```
 
 4. **Access the web interface**
-   Open your browser and navigate to `http://localhost:8000`
+    Open your browser and navigate to `http://localhost:8000`
+
+### Alternative: Docker Installation (Coming Soon)
+
+```bash
+docker run -p 8000:8000 net-pulse:latest
+```
 
 ### Docker Installation (Coming Soon)
 
 ```bash
 docker run -p 8000:8000 net-pulse:latest
 ```
+
+## 🔧 Troubleshooting
+
+### Command Not Found
+If you get a "command not found" error when running `net-pulse`:
+
+1. **Activate your virtual environment first:**
+   ```bash
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+2. **Run directly with Python:**
+   ```bash
+   python3 -m netpulse.main
+   ```
+
+3. **Check if the package is installed:**
+   ```bash
+   pip list | grep net-pulse
+   ```
+
+### Port Already in Use
+If port 8000 is already in use, you can:
+
+1. **Stop the conflicting service:**
+   ```bash
+   # Find what's using port 8000
+   lsof -i :8000  # On macOS/Linux
+   netstat -ano | findstr :8000  # On Windows
+
+   # Stop the process (replace PID with actual process ID)
+   kill PID
+   ```
+
+2. **Use a different port:**
+   ```bash
+   # Set environment variable before running
+   export NETPULSE_PORT=8001  # On macOS/Linux
+   set NETPULSE_PORT=8001     # On Windows
+
+   # Or run with custom port
+   python3 -c "import os; os.environ['NETPULSE_PORT']='8001'; from netpulse.main import main; main()"
+   ```
+
+### Virtual Environment Issues
+- **Python not found:** Ensure Python 3.8+ is installed: `python3 --version`
+- **Virtual environment creation fails:** Try `python3 -m venv venv` instead of `python -m venv venv`
+- **Activation fails:** Use `source venv/bin/activate` (not `python venv/bin/activate`)
 
 ## 📖 Documentation
 
@@ -171,6 +236,9 @@ Net-Pulse follows a modular architecture with clear separation of concerns:
 Net-Pulse maintains high code quality with comprehensive testing:
 
 ```bash
+# Activate virtual environment first
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
 # Run all tests
 pytest
 
@@ -205,6 +273,9 @@ We welcome contributions! Please see our contributing guidelines:
 ### Development Setup
 
 ```bash
+# Activate virtual environment first
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
 # Install development dependencies
 pip install -e ".[dev]"
 
