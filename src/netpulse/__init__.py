@@ -12,5 +12,6 @@ __description__ = "Lightweight network traffic monitoring application"
 from . import database
 from . import network
 from . import collector
+from . import autodetect
 
-__all__ = ['database', 'network', 'collector']
+__all__ = ['database', 'network', 'collector', 'autodetect']

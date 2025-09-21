@@ -16,7 +16,7 @@ Functions:
 import psutil
 import logging
 from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -141,7 +141,7 @@ def get_interface_stats(interface_name: str) -> Dict[str, Any]:
             'tx_errors': stats.errout,
             'rx_drops': stats.dropin,
             'tx_drops': stats.dropout,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'status': interface_status
         }
 
@@ -285,7 +285,7 @@ def get_interface_traffic_summary() -> Dict[str, Any]:
             'total_tx_bytes': 0,
             'total_rx_packets': 0,
             'total_tx_packets': 0,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
 
         for stats in all_stats.values():

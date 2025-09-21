@@ -209,11 +209,15 @@ class NetworkDataCollector:
             CollectionError: If collection fails
         """
         try:
+            logger.debug("collect_once called")
             result = self._perform_collection()
+            logger.debug(f"collect_once got result: {result}")
+            collected_count = len(result.get('data', {}))
+            logger.debug(f"collect_once calculated interfaces_collected: {collected_count}")
             return {
                 'success': True,
                 'timestamp': datetime.now().isoformat(),
-                'interfaces_collected': len(result.get('data', {})),
+                'interfaces_collected': collected_count,
                 'errors': result.get('errors', []),
                 'stats': self.get_collection_stats()
             }
@@ -320,33 +324,61 @@ class NetworkDataCollector:
         try:
             # Get monitored interfaces from configuration
             monitored_interfaces = self._get_monitored_interfaces()
+            logger.debug(f"Monitored interfaces: {monitored_interfaces}")
 
             if not monitored_interfaces:
                 # If no specific interfaces configured, monitor all available interfaces
                 try:
                     all_stats = get_all_interface_stats()
                     monitored_interfaces = list(all_stats.keys())
+                    logger.debug(f"No configured interfaces, using all available: {monitored_interfaces}")
                 except NetworkError as e:
                     errors.append(f"Failed to get all interface stats: {e}")
+                    logger.error(f"Failed to get all interface stats: {e}")
                     return {'success': False, 'data': {}, 'errors': errors}
 
             # Collect data for each monitored interface
+            logger.debug(f"Starting collection for {len(monitored_interfaces)} interfaces")
             for interface_name in monitored_interfaces:
                 try:
                     # Get current interface stats
                     current_stats = get_interface_stats(interface_name)
+                    logger.debug(f"Got stats for {interface_name}: {current_stats}")
 
                     # Calculate deltas and handle counter rollover
                     delta_data = self._calculate_deltas(interface_name, current_stats)
+                    logger.debug(f"Delta calculation for {interface_name}: {delta_data}")
 
                     if delta_data:
                         # Store in database
                         self._store_traffic_data(delta_data)
+                        logger.debug(f"Stored data for {interface_name}")
 
                         # Update previous data for next delta calculation
                         self._update_previous_data(interface_name, current_stats)
 
                         collected_data[interface_name] = delta_data
+                        logger.debug(f"Added {interface_name} to collected data")
+                    else:
+                        # First collection - return current stats as baseline data
+                        baseline_data = {
+                            'interface_name': interface_name,
+                            'timestamp': datetime.now().isoformat(),
+                            'rx_bytes': current_stats['rx_bytes'],
+                            'tx_bytes': current_stats['tx_bytes'],
+                            'rx_packets': current_stats['rx_packets'],
+                            'tx_packets': current_stats['tx_packets'],
+                            'collection_interval_seconds': 0.0
+                        }
+                        # Store baseline in database
+                        self._store_traffic_data(baseline_data)
+                        logger.debug(f"Stored baseline data for {interface_name}")
+
+                        # Update previous data for next delta calculation
+                        self._update_previous_data(interface_name, current_stats)
+
+                        collected_data[interface_name] = baseline_data
+                        logger.debug(f"Added baseline {interface_name} to collected data")
 
                 except (InterfaceNotFoundError, NetworkError) as e:
                     errors.append(f"Failed to collect data for {interface_name}: {e}")
@@ -355,11 +387,31 @@ class NetworkDataCollector:
                     errors.append(f"Unexpected error for {interface_name}: {e}")
                     logger.error(f"Unexpected error collecting data for {interface_name}: {e}")
 
-            return {
+            logger.debug(f"Collection completed. Collected data: {collected_data}, Errors: {errors}")
+
+            # Update statistics (same as _collection_job)
+            with self._lock:
+                self._stats.total_polls += 1
+                self._stats.last_poll_time = datetime.now()
+
+                if len(errors) == 0:
+                    self._stats.successful_polls += 1
+                    self._stats.consecutive_failures = 0
+                    self._stats.last_successful_poll = datetime.now()
+                else:
+                    self._stats.failed_polls += 1
+                    self._stats.consecutive_failures += 1
+                    self._stats.total_errors += len(errors)
+
+                self._stats.interfaces_monitored = len(self._previous_data)
+
+            result = {
                 'success': len(errors) == 0,
                 'data': collected_data,
                 'errors': errors
             }
+            logger.debug(f"Returning result: {result}")
+            return result
 
         except Exception as e:
             logger.error(f"Collection cycle failed: {e}")
@@ -382,11 +434,15 @@ class NetworkDataCollector:
         """
         try:
             current_time = datetime.now()
+            logger.debug(f"Calculating deltas for {interface_name}, current_stats: {current_stats}")
 
             # Get previous data
             prev_data = self._previous_data.get(interface_name)
+            logger.debug(f"Previous data for {interface_name}: {prev_data}")
+
             if not prev_data:
                 # First collection for this interface, store baseline
+                logger.debug(f"First collection for {interface_name}, storing baseline")
                 self._previous_data[interface_name] = InterfaceData(
                     rx_bytes=current_stats['rx_bytes'],
                     tx_bytes=current_stats['tx_bytes'],
@@ -434,6 +490,8 @@ class NetworkDataCollector:
 
         except Exception as e:
             logger.error(f"Failed to calculate deltas for {interface_name}: {e}")
+            logger.error(f"Current stats keys: {list(current_stats.keys()) if isinstance(current_stats, dict) else 'Not a dict'}")
+            logger.error(f"Current stats: {current_stats}")
             return None
 
     def _calculate_counter_delta(self, previous: int, current: int) -> int:
