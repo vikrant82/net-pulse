@@ -20,79 +20,6 @@ Net-Pulse provides real-time network interface discovery, traffic monitoring, an
 - **⚙️ Configuration UI**: Web-based interface configuration (planned)
 - **🐳 Docker Ready**: Containerized deployment support (planned)
 
-## 🔍 How Net-Pulse Works
-
-### Auto-Detection Phase (Startup)
-When Net-Pulse starts, it automatically discovers and configures network interfaces:
-
-1. **Interface Discovery**: Scans all network interfaces using `psutil.net_if_addrs()`
-2. **Activity Analysis**: Monitors each interface for 2 seconds to assess traffic patterns
-3. **Smart Filtering**: Excludes loopback, docker, and inactive interfaces
-4. **Primary Selection**: Identifies the main interface based on traffic volume
-5. **Configuration Storage**: Saves 24+ interface settings to database
-
-**Example Auto-Detection Results:**
-```
-INFO:netpulse.autodetect:Discovered 24 valid interfaces
-INFO:netpulse.autodetect:Identified primary interface: en0
-INFO:netpulse.autodetect:Configuration population completed: 24 interfaces configured
-```
-
-### Continuous Monitoring (Every 30 Seconds)
-Net-Pulse runs a background collection process that:
-
-- **Collects Data**: Gathers statistics from all monitored interfaces simultaneously
-- **Calculates Deltas**: Compares current vs previous readings for accurate measurements
-- **Handles Rollovers**: Manages 64-bit counter overflow for precise byte counting
-- **Stores Results**: Saves traffic data with timestamps to SQLite database
-- **Tracks Health**: Monitors collection statistics and error rates
-
-### Interface Management
-**Default Behavior**: Monitors all active interfaces (24 interfaces by default)
-**Interface Types**:
-- **en0**: Primary interface (Ethernet/Wi-Fi)
-- **utun5, utun8, utun13**: VPN tunnels
-- **bridge100, bridge101**: Network bridges
-- **anpi0, anpi1, anpi2**: Apple network interfaces
-- **awdl0**: Apple Wireless Direct Link
-
-**Primary Interface Selection**:
-- Uses traffic-based scoring: `total_bytes + (packets_per_second × 1000)`
-- Monitors all interfaces for 10 seconds during startup
-- Selects interface with highest combined traffic score
-- Requires minimum 1KB of traffic for selection
-
-### Data Collection Process
-```mermaid
-graph TD
-   A[30s Timer] --> B[Collection Cycle]
-   B --> C[Get All Interface Stats<br/>24 interfaces]
-   C --> D[Calculate Traffic Deltas<br/>Current vs Previous]
-   D --> E[Handle Counter Rollover<br/>64-bit overflow]
-   E --> F[Store in Database<br/>SQLite with indexes]
-   F --> G[Update Statistics<br/>Success/Error tracking]
-   G --> A
-```
-
-**What Gets Measured:**
-- **Bytes**: Received (`rx_bytes`) and transmitted (`tx_bytes`)
-- **Packets**: Received (`rx_packets`) and transmitted (`tx_packets`)
-- **Errors**: Receive/transmit error counts
-- **Drops**: Receive/transmit drop counts
-- **Timestamps**: ISO 8601 format for cross-platform compatibility
-
-**Storage Format:**
-```json
-{
- "interface_name": "en0",
- "timestamp": "2024-01-15T10:30:00Z",
- "rx_bytes": 18446744073709551615,
- "tx_bytes": 9223372036854775807,
- "rx_packets": 4294967295,
- "tx_packets": 2147483647
-}
-```
-
 ## 📋 Project Status
 
 | Milestone | Status | Progress |
@@ -176,28 +103,6 @@ If you get a "command not found" error when running `net-pulse`:
    pip list | grep net-pulse
    ```
 
-### Port Already in Use
-If port 8000 is already in use, you can:
-
-1. **Stop the conflicting service:**
-   ```bash
-   # Find what's using port 8000
-   lsof -i :8000  # On macOS/Linux
-   netstat -ano | findstr :8000  # On Windows
-
-   # Stop the process (replace PID with actual process ID)
-   kill PID
-   ```
-
-2. **Use a different port:**
-   ```bash
-   # Set environment variable before running
-   export NETPULSE_PORT=8001  # On macOS/Linux
-   set NETPULSE_PORT=8001     # On Windows
-
-   # Or run with custom port
-   python3 -c "import os; os.environ['NETPULSE_PORT']='8001'; from netpulse.main import main; main()"
-   ```
 
 ### Virtual Environment Issues
 - **Python not found:** Ensure Python 3.8+ is installed: `python3 --version`
@@ -222,6 +127,28 @@ Net-Pulse uses a configuration system stored in SQLite database. Default setting
 | `collector.retry_delay` | 1.0 seconds | Delay between retries |
 | `collector.monitored_interfaces` | "" | Comma-separated interface list (empty = all) |
 
+#### Configuration Management
+
+All configuration endpoints support GET (retrieve) and PUT (update) operations:
+
+- **Collection Interval**: `/api/config/collection-interval` (1-3600 seconds)
+- **Max Retries**: `/api/config/max-retries` (1-100 attempts)
+- **Retry Delay**: `/api/config/retry-delay` (0.1-300 seconds)
+- **Monitored Interfaces**: `/api/config/interfaces` (see [Managing Monitored Interfaces](#managing-monitored-interfaces))
+
+**Quick Reference:**
+```bash
+# Get current settings
+curl http://localhost:8000/api/config/collection-interval
+curl http://localhost:8000/api/config/max-retries
+curl http://localhost:8000/api/config/retry-delay
+
+# Update settings
+curl -X PUT http://localhost:8000/api/config/collection-interval -d '{"collection_interval": 60}'
+curl -X PUT http://localhost:8000/api/config/max-retries -d '{"max_retries": 5}'
+curl -X PUT http://localhost:8000/api/config/retry-delay -d '{"retry_delay": 2.0}'
+```
+
 ### Environment Variables
 
 | Variable | Default | Description |
@@ -229,6 +156,58 @@ Net-Pulse uses a configuration system stored in SQLite database. Default setting
 | `NETPULSE_HOST` | `0.0.0.0` | Server bind address |
 | `NETPULSE_PORT` | `8000` | Server port |
 | `NETPULSE_LOG_LEVEL` | `INFO` | Logging verbosity |
+
+**Example Usage:**
+```bash
+# Set custom server configuration
+export NETPULSE_HOST=127.0.0.1
+export NETPULSE_PORT=9000
+export NETPULSE_LOG_LEVEL=DEBUG
+
+# Run with custom configuration
+python3 -m netpulse.main
+```
+
+### Managing Monitored Interfaces
+
+**Configuration only sets what SHOULD be monitored. Data collection only happens when collector is running.**
+
+#### Quick Interface Control
+```bash
+# Check current monitoring setup
+curl http://localhost:8000/api/config/interfaces
+
+# Monitor specific interfaces only
+curl -X PUT http://localhost:8000/api/config/interfaces \
+  -d '{"interfaces": ["en0", "wlan0"]}'
+
+# Monitor ALL interfaces (default)
+curl -X PUT http://localhost:8000/api/config/interfaces \
+  -d '{"interfaces": []}'
+```
+
+#### Interface Selection Options
+- `[]` - Monitor all interfaces (default, comprehensive)
+- `["en0"]` - Primary interface only (minimal resource usage)
+- `["en0", "wlan0"]` - Ethernet + Wi-Fi only
+- `["en0", "utun5", "bridge100"]` - Custom selection
+
+#### Important: Configuration vs Collection
+- **Configuration** = Which interfaces to monitor (set via API)
+- **Collection** = Actual data gathering (requires `/collector/start`)
+- **Data Availability** = Only interfaces that were monitored when collector was running have historical data
+
+**Example:**
+```bash
+# Configure to monitor only en0
+curl -X PUT http://localhost:8000/api/config/interfaces \
+  -d '{"interfaces": ["en0"]}'
+
+# Start the collector
+curl -X POST http://localhost:8000/collector/start
+
+# Now only en0 data will be collected and stored
+```
 
 ## 📊 API Reference
 
@@ -256,12 +235,38 @@ Net-Pulse uses a configuration system stored in SQLite database. Default setting
 - `GET /api/traffic/summary` - Get traffic summary across all interfaces
 - `GET /api/traffic/latest` - Get latest traffic data
 
+#### Traffic Data Filtering Examples
+```bash
+# Get last 100 records for specific interface
+curl "http://localhost:8000/api/traffic/history?interface_name=en0&limit=100"
+
+# Get data for last hour (adjust time format as needed)
+curl "http://localhost:8000/api/traffic/history?start_time=2024-01-15T10:00:00"
+
+# Get data for time range
+curl "http://localhost:8000/api/traffic/history?start_time=2024-01-15T09:00:00&end_time=2024-01-15T11:00:00"
+
+# Get latest 10 records
+curl "http://localhost:8000/api/traffic/latest?limit=10"
+
+# Get traffic summary for specific interface
+curl "http://localhost:8000/api/traffic/summary"
+```
+
 ### Configuration
 
 - `GET /api/config/interfaces` - Get monitored interfaces configuration
 - `PUT /api/config/interfaces` - Update monitored interfaces
 - `GET /api/config/collection-interval` - Get collection interval
 - `PUT /api/config/collection-interval` - Update collection interval
+- `GET /api/config/max-retries` - Get maximum retry attempts setting
+- `PUT /api/config/max-retries` - Update maximum retry attempts setting
+- `GET /api/config/retry-delay` - Get retry delay setting
+- `PUT /api/config/retry-delay` - Update retry delay setting
+- `GET /api/config/max-retries` - Get maximum retry attempts setting
+- `PUT /api/config/max-retries` - Update maximum retry attempts setting
+- `GET /api/config/retry-delay` - Get retry delay setting
+- `PUT /api/config/retry-delay` - Update retry delay setting
 
 ### System Information
 
@@ -272,6 +277,43 @@ Net-Pulse uses a configuration system stored in SQLite database. Default setting
 ### Data Export
 
 - `GET /api/export/traffic` - Export traffic data (JSON/CSV)
+
+## 🔍 How Net-Pulse Works
+
+### Two Key Concepts
+
+**1. Interface Configuration** - Which interfaces to monitor
+- Set via `/api/config/interfaces` endpoint
+- Empty array `[]` = monitor all interfaces (default)
+- Specific list `["en0", "wlan0"]` = monitor only those interfaces
+
+**2. Data Collection** - The actual monitoring process
+- Must be started via `/collector/start` endpoint
+- Runs every 30 seconds in background
+- Only collects data for configured interfaces
+
+### Data Availability
+
+**Always Available** (from system):
+- Interface information: `/api/interfaces`
+- Current statistics: `/api/interfaces/{name}/stats`
+
+**Only Available When Collector is Running**:
+- Historical traffic data: `/api/traffic/*`
+- Traffic summaries: `/api/traffic/summary`
+- Time-series data: `/api/traffic/history`
+
+### Quick Start
+```bash
+# 1. Start the collector
+curl -X POST http://localhost:8000/collector/start
+
+# 2. Check status
+curl http://localhost:8000/collector/status
+
+# 3. Get traffic data
+curl http://localhost:8000/api/traffic/latest
+```
 
 ## 🏗️ Architecture
 
@@ -318,6 +360,13 @@ graph TD
     I --> J[Counter Rollover<br/>64-bit overflow handling]
     J --> K[Database Storage<br/>Indexed SQLite tables]
     K --> L[API Endpoints<br/>Real-time data access]
+```
+
+**Alternative Text-Based Flow:**
+```
+Application Startup → Auto-Detection Phase → Interface Discovery → Activity Analysis → Primary Selection → Configuration Storage
+                                    ↓
+Background Collection (30s) → Multi-Interface Stats → Delta Calculation → Rollover Handling → Database Storage → API Access
 ```
 
 ### Core Components

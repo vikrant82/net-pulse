@@ -104,6 +104,14 @@ class ConfigurationUpdate(BaseModel):
     interfaces: Optional[List[str]] = None
     collection_interval: Optional[int] = Field(None, ge=1, le=3600)
 
+class MaxRetriesUpdate(BaseModel):
+    """Max retries configuration update model."""
+    max_retries: int = Field(..., ge=1, le=100, description="Maximum retry attempts (1-100)")
+
+class RetryDelayUpdate(BaseModel):
+    """Retry delay configuration update model."""
+    retry_delay: float = Field(..., gt=0, le=300, description="Delay between retries in seconds (0.1-300)")
+
 class ErrorResponse(BaseModel):
     """Error response model."""
     error: str
@@ -480,6 +488,98 @@ def create_app() -> FastAPI:
         except Exception as e:
             logger.error(f"Failed to update collection interval: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to update collection interval: {str(e)}")
+
+    @app.get("/api/config/max-retries",
+             response_model=Dict[str, int],
+             summary="Get max retries setting",
+             description="Get the current maximum retry attempts setting.")
+    async def get_max_retries():
+        """Get current max retries setting."""
+        try:
+            logger.info("Fetching max retries configuration")
+            from netpulse.database import get_configuration_value
+            retries_str = get_configuration_value('collector.max_retries')
+            retries = int(retries_str) if retries_str else 3
+            return {"max_retries": retries}
+        except Exception as e:
+            logger.error(f"Failed to get max retries: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to retrieve max retries setting: {str(e)}")
+
+    @app.put("/api/config/max-retries",
+             response_model=Dict[str, int],
+             summary="Update max retries setting",
+             description="Update the maximum retry attempts setting (1-100).")
+    async def update_max_retries(
+        config: MaxRetriesUpdate
+    ):
+        """Update max retries configuration."""
+        try:
+            logger.info(f"Updating max retries: {config.max_retries}")
+            if config.max_retries is None:
+                raise HTTPException(status_code=400, detail="max_retries field is required")
+
+            if not (1 <= config.max_retries <= 100):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Max retries must be between 1 and 100"
+                )
+
+            # Update configuration
+            from netpulse.database import set_configuration_value
+            set_configuration_value('collector.max_retries', str(config.max_retries))
+
+            return {"max_retries": config.max_retries}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to update max retries: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to update max retries setting: {str(e)}")
+
+    @app.get("/api/config/retry-delay",
+             response_model=Dict[str, float],
+             summary="Get retry delay setting",
+             description="Get the current retry delay setting in seconds.")
+    async def get_retry_delay():
+        """Get current retry delay setting."""
+        try:
+            logger.info("Fetching retry delay configuration")
+            from netpulse.database import get_configuration_value
+            delay_str = get_configuration_value('collector.retry_delay')
+            delay = float(delay_str) if delay_str else 1.0
+            return {"retry_delay_seconds": delay}
+        except Exception as e:
+            logger.error(f"Failed to get retry delay: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to retrieve retry delay setting: {str(e)}")
+
+    @app.put("/api/config/retry-delay",
+             response_model=Dict[str, float],
+             summary="Update retry delay setting",
+             description="Update the retry delay setting in seconds (0.1-300).")
+    async def update_retry_delay(
+        config: RetryDelayUpdate
+    ):
+        """Update retry delay configuration."""
+        try:
+            logger.info(f"Updating retry delay: {config.retry_delay}")
+            if config.retry_delay is None:
+                raise HTTPException(status_code=400, detail="retry_delay field is required")
+
+            if not (0.1 <= config.retry_delay <= 300):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Retry delay must be between 0.1 and 300 seconds"
+                )
+
+            # Update configuration
+            from netpulse.database import set_configuration_value
+            set_configuration_value('collector.retry_delay', str(config.retry_delay))
+
+            return {"retry_delay_seconds": config.retry_delay}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to update retry delay: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to update retry delay setting: {str(e)}")
 
     # ============================================================================
     # SYSTEM INFORMATION ENDPOINTS

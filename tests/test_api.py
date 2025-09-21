@@ -399,6 +399,134 @@ class TestConfigurationEndpoints(TestAPIBase):
         data = response.json()
         assert "collection_interval field is required" in data["detail"]
 
+    def test_get_max_retries_success(self, client):
+        """Test successful retrieval of max retries setting."""
+        with patch('netpulse.database.get_configuration_value') as mock_get_config:
+            mock_get_config.return_value = "5"
+
+            response = client.get("/api/config/max-retries")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["max_retries"] == 5
+
+    def test_get_max_retries_default(self, client):
+        """Test max retries retrieval with default value."""
+        from netpulse.database import get_configuration_value
+        with patch.object(get_configuration_value, '__call__') as mock_get_config:
+            mock_get_config.return_value = None
+
+            response = client.get("/api/config/max-retries")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["max_retries"] == 3
+
+    def test_update_max_retries_success(self, client):
+        """Test successful update of max retries setting."""
+        from netpulse.database import set_configuration_value
+        with patch.object(set_configuration_value, '__call__') as mock_set_config:
+            config_data = {"max_retries": 10}
+            response = client.put("/api/config/max-retries", json=config_data)
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["max_retries"] == 10
+
+    def test_update_max_retries_invalid_value_too_high(self, client):
+        """Test update with max retries value too high."""
+        config_data = {"max_retries": 150}  # Too high
+        response = client.put("/api/config/max-retries", json=config_data)
+
+        assert response.status_code == 422  # FastAPI validation error
+        data = response.json()
+        assert "detail" in data
+        assert "Input should be less than or equal to 100" in str(data["detail"])
+
+    def test_update_max_retries_invalid_value_too_low(self, client):
+        """Test update with max retries value too low."""
+        config_data = {"max_retries": 0}  # Too low
+        response = client.put("/api/config/max-retries", json=config_data)
+
+        assert response.status_code == 422  # FastAPI validation error
+        data = response.json()
+        assert "detail" in data
+        assert "Input should be greater than or equal to 1" in str(data["detail"])
+
+    def test_update_max_retries_missing_field(self, client):
+        """Test update with missing max_retries field."""
+        config_data = {}
+        response = client.put("/api/config/max-retries", json=config_data)
+
+        assert response.status_code == 422  # FastAPI validation error
+        data = response.json()
+        assert "detail" in data
+        assert "Field required" in str(data["detail"])
+
+    def test_get_retry_delay_success(self, client):
+        """Test successful retrieval of retry delay setting."""
+        with patch('netpulse.database.get_configuration_value') as mock_get_config:
+            mock_get_config.return_value = "2.5"
+
+            response = client.get("/api/config/retry-delay")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["retry_delay_seconds"] == 2.5
+
+    def test_get_retry_delay_default(self, client):
+        """Test retry delay retrieval with default value."""
+        from netpulse.database import get_configuration_value
+        with patch.object(get_configuration_value, '__call__') as mock_get_config:
+            mock_get_config.return_value = None
+
+            response = client.get("/api/config/retry-delay")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["retry_delay_seconds"] == 1.0
+
+    def test_update_retry_delay_success(self, client):
+        """Test successful update of retry delay setting."""
+        from netpulse.database import set_configuration_value
+        with patch.object(set_configuration_value, '__call__') as mock_set_config:
+            config_data = {"retry_delay": 3.0}
+            response = client.put("/api/config/retry-delay", json=config_data)
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["retry_delay_seconds"] == 3.0
+
+    def test_update_retry_delay_invalid_value_too_high(self, client):
+        """Test update with retry delay value too high."""
+        config_data = {"retry_delay": 400.0}  # Too high
+        response = client.put("/api/config/retry-delay", json=config_data)
+
+        assert response.status_code == 422  # FastAPI validation error
+        data = response.json()
+        assert "detail" in data
+        assert "Input should be less than or equal to 300" in str(data["detail"])
+
+    def test_update_retry_delay_invalid_value_too_low(self, client):
+        """Test update with retry delay value too low."""
+        config_data = {"retry_delay": 0.05}  # Too low
+        response = client.put("/api/config/retry-delay", json=config_data)
+
+        assert response.status_code == 400  # Custom validation error
+        data = response.json()
+        assert "detail" in data
+        assert "Retry delay must be between 0.1 and 300 seconds" in data["detail"]
+
+    def test_update_retry_delay_missing_field(self, client):
+        """Test update with missing retry_delay field."""
+        config_data = {}
+        response = client.put("/api/config/retry-delay", json=config_data)
+
+        assert response.status_code == 422  # FastAPI validation error
+        data = response.json()
+        assert "detail" in data
+        assert "Field required" in str(data["detail"])
+
 
 class TestSystemInformationEndpoints(TestAPIBase):
     """Test system information endpoints."""
@@ -784,6 +912,8 @@ class TestAPIDocumentation(TestAPIBase):
             "/api/traffic/latest",
             "/api/config/interfaces",
             "/api/config/collection-interval",
+            "/api/config/max-retries",
+            "/api/config/retry-delay",
             "/api/system/info",
             "/api/system/health",
             "/api/system/metrics",
