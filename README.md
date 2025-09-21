@@ -20,6 +20,79 @@ Net-Pulse provides real-time network interface discovery, traffic monitoring, an
 - **⚙️ Configuration UI**: Web-based interface configuration (planned)
 - **🐳 Docker Ready**: Containerized deployment support (planned)
 
+## 🔍 How Net-Pulse Works
+
+### Auto-Detection Phase (Startup)
+When Net-Pulse starts, it automatically discovers and configures network interfaces:
+
+1. **Interface Discovery**: Scans all network interfaces using `psutil.net_if_addrs()`
+2. **Activity Analysis**: Monitors each interface for 2 seconds to assess traffic patterns
+3. **Smart Filtering**: Excludes loopback, docker, and inactive interfaces
+4. **Primary Selection**: Identifies the main interface based on traffic volume
+5. **Configuration Storage**: Saves 24+ interface settings to database
+
+**Example Auto-Detection Results:**
+```
+INFO:netpulse.autodetect:Discovered 24 valid interfaces
+INFO:netpulse.autodetect:Identified primary interface: en0
+INFO:netpulse.autodetect:Configuration population completed: 24 interfaces configured
+```
+
+### Continuous Monitoring (Every 30 Seconds)
+Net-Pulse runs a background collection process that:
+
+- **Collects Data**: Gathers statistics from all monitored interfaces simultaneously
+- **Calculates Deltas**: Compares current vs previous readings for accurate measurements
+- **Handles Rollovers**: Manages 64-bit counter overflow for precise byte counting
+- **Stores Results**: Saves traffic data with timestamps to SQLite database
+- **Tracks Health**: Monitors collection statistics and error rates
+
+### Interface Management
+**Default Behavior**: Monitors all active interfaces (24 interfaces by default)
+**Interface Types**:
+- **en0**: Primary interface (Ethernet/Wi-Fi)
+- **utun5, utun8, utun13**: VPN tunnels
+- **bridge100, bridge101**: Network bridges
+- **anpi0, anpi1, anpi2**: Apple network interfaces
+- **awdl0**: Apple Wireless Direct Link
+
+**Primary Interface Selection**:
+- Uses traffic-based scoring: `total_bytes + (packets_per_second × 1000)`
+- Monitors all interfaces for 10 seconds during startup
+- Selects interface with highest combined traffic score
+- Requires minimum 1KB of traffic for selection
+
+### Data Collection Process
+```mermaid
+graph TD
+   A[30s Timer] --> B[Collection Cycle]
+   B --> C[Get All Interface Stats<br/>24 interfaces]
+   C --> D[Calculate Traffic Deltas<br/>Current vs Previous]
+   D --> E[Handle Counter Rollover<br/>64-bit overflow]
+   E --> F[Store in Database<br/>SQLite with indexes]
+   F --> G[Update Statistics<br/>Success/Error tracking]
+   G --> A
+```
+
+**What Gets Measured:**
+- **Bytes**: Received (`rx_bytes`) and transmitted (`tx_bytes`)
+- **Packets**: Received (`rx_packets`) and transmitted (`tx_packets`)
+- **Errors**: Receive/transmit error counts
+- **Drops**: Receive/transmit drop counts
+- **Timestamps**: ISO 8601 format for cross-platform compatibility
+
+**Storage Format:**
+```json
+{
+ "interface_name": "en0",
+ "timestamp": "2024-01-15T10:30:00Z",
+ "rx_bytes": 18446744073709551615,
+ "tx_bytes": 9223372036854775807,
+ "rx_packets": 4294967295,
+ "tx_packets": 2147483647
+}
+```
+
 ## 📋 Project Status
 
 | Milestone | Status | Progress |
@@ -202,34 +275,73 @@ Net-Pulse uses a configuration system stored in SQLite database. Default setting
 
 ## 🏗️ Architecture
 
-Net-Pulse follows a modular architecture with clear separation of concerns:
+### System Architecture Diagram
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │   Web Browser   │────│   FastAPI Server │────│  APScheduler    │
 │   (Dashboard)   │    │   (Port 8000)    │    │  (Background)   │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
-                                │                       │
-                                ▼                       ▼
-                       ┌──────────────────┐    ┌─────────────────┐
-                       │ Network Module   │    │ Database Module │
-                       │ (psutil)         │    │ (SQLite)        │
-                       └──────────────────┘    └─────────────────┘
-                                │                       │
-                                ▼                       ▼
-                       ┌──────────────────┐    ┌─────────────────┐
-                       │ Auto-Detection   │────│ Traffic Data    │
-                       │ Module           │    │ Collection      │
-                       └──────────────────┘    └─────────────────┘
+          │                       │                       │
+          ▼                       ▼                       ▼
+  ┌──────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+  │ Auto-Detection   │────│ Network Module  │────│ Database Module │
+  │ Module           │    │ (psutil)        │    │ (SQLite)        │
+  └──────────────────┘    └─────────────────┘    └─────────────────┘
+          │                       │                       │
+          ▼                       ▼                       ▼
+  ┌──────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+  │ Interface        │    │ Traffic Data    │    │ Configuration   │
+  │ Validation       │    │ Collection      │    │ Storage         │
+  └──────────────────┘    └─────────────────┘    └─────────────────┘
+          │                       │                       │
+          ▼                       ▼                       ▼
+  ┌──────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+  │ 24 Network       │────│ Delta           │────│ 20 API          │
+  │ Interfaces       │    │ Calculation     │    │ Endpoints       │
+  └──────────────────┘    └──────────────────┘    └─────────────────┘
+```
+
+### Data Flow Architecture
+
+```mermaid
+graph TD
+    A[Application Startup] --> B[Auto-Detection Phase]
+    B --> C[Discover Interfaces<br/>psutil.net_if_addrs()]
+    C --> D[Activity Analysis<br/>2s per interface]
+    D --> E[Primary Interface<br/>Traffic-based selection]
+    E --> F[Configuration Storage<br/>Database population]
+
+    F --> G[Background Collection<br/>Every 30 seconds]
+    G --> H[Multi-Interface Stats<br/>24 interfaces parallel]
+    H --> I[Delta Calculation<br/>Current vs Previous]
+    I --> J[Counter Rollover<br/>64-bit overflow handling]
+    J --> K[Database Storage<br/>Indexed SQLite tables]
+    K --> L[API Endpoints<br/>Real-time data access]
 ```
 
 ### Core Components
 
-- **Network Module**: Cross-platform interface discovery and monitoring
-- **Database Module**: SQLite storage with optimized queries
-- **Collector Module**: Background data collection and scheduling
 - **Auto-Detection Module**: Intelligent interface discovery and configuration
+  - 2-second activity analysis per interface
+  - Traffic-based primary interface selection
+  - Smart filtering of invalid interfaces
+- **Network Module**: Cross-platform interface discovery and monitoring
+  - Real-time statistics collection via psutil
+  - Interface validation and status monitoring
+  - Traffic summary calculations
+- **Database Module**: SQLite storage with optimized queries
+  - Time-series traffic data storage
+  - Configuration management
+  - Indexed queries for performance
+- **Collector Module**: Background data collection and scheduling
+  - 30-second polling intervals (configurable)
+  - Delta calculation with rollover handling
+  - Error handling and retry logic
 - **FastAPI Server**: RESTful API and web interface foundation
+  - 20 comprehensive API endpoints
+  - Real-time data access
+  - Health monitoring and status reporting
 
 ## 🧪 Testing
 

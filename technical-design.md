@@ -169,7 +169,7 @@ CREATE TABLE configuration (
 
 ```
 Network Interfaces → psutil → Network Module → Delta Calculation → Database
-     ↓                    ↓           ↓              ↓              ↓
+      ↓                    ↓           ↓              ↓              ↓
 Real-time stats → Interface → Traffic stats → Time-based → SQLite storage
 collection      discovery  collection     deltas     with indexing
 ```
@@ -178,7 +178,7 @@ collection      discovery  collection     deltas     with indexing
 
 ```
 System Startup → Interface Discovery → Traffic Analysis → Primary Interface
-     ↓              ↓                     ↓                  ↓
+      ↓              ↓                     ↓                  ↓
 Application → psutil.net_if_addrs() → Activity monitoring → Traffic-based
 initialization                    → Interface filtering  → selection
 ```
@@ -187,9 +187,209 @@ initialization                    → Interface filtering  → selection
 
 ```
 User Input → API Endpoints → Configuration Storage → Collector Update
-   ↓           ↓              ↓                     ↓
+    ↓           ↓              ↓                     ↓
 Web UI → FastAPI routes → SQLite config table → Background reload
 ```
+
+## 3.4 Auto-Detection Process Details
+
+### 3.4.1 Interface Discovery and Validation
+
+**Discovery Method:**
+- Uses `psutil.net_if_addrs()` for cross-platform interface detection
+- Scans all available network interfaces simultaneously
+- Collects interface metadata including addresses, status, MTU, and speed
+
+**Validation Criteria:**
+- **Loopback Exclusion**: Filters out `lo`, `lo0`, `loopback` interfaces
+- **Docker/Virtual Interface Exclusion**: Removes `docker*`, `veth*`, `br-*` interfaces
+- **Address Requirement**: Must have IP addresses (except wireless interfaces)
+- **Status Check**: Interface must be in "up" state
+
+**Interface Classification:**
+```python
+# Interface type detection logic
+if interface_name.startswith('wlan'):
+    interface_type = 'wireless'
+elif interface_name.startswith('eth'):
+    interface_type = 'ethernet'
+elif interface_name.startswith('en'):
+    interface_type = 'ethernet'
+elif interface_name.startswith('wlp'):
+    interface_type = 'wireless'
+else:
+    interface_type = 'unknown'
+```
+
+### 3.4.2 Activity Analysis Process
+
+**2-Second Sampling Period:**
+- Monitors each interface for exactly 2 seconds
+- Samples traffic statistics every 1 second
+- Records `rx_bytes`, `tx_bytes`, `rx_packets`, `tx_packets`
+
+**Activity Level Classification:**
+```python
+total_rate = rx_rate + tx_rate
+if total_rate > 1000000:  # > 1 MB/s
+    activity_level = 'high'
+elif total_rate > 100000:  # > 100 KB/s
+    activity_level = 'medium'
+elif total_rate > 1000:  # > 1 KB/s
+    activity_level = 'low'
+else:
+    activity_level = 'minimal'
+```
+
+### 3.4.3 Primary Interface Selection Algorithm
+
+**Traffic Score Calculation:**
+```python
+# Score combines total traffic and packet rate
+score = total_bytes + (packets_per_second * 1000)
+primary_interface = max(interface_scores.items(), key=lambda x: x[1])[0]
+```
+
+**Selection Criteria:**
+- **Traffic Volume**: Total bytes transferred (rx_bytes + tx_bytes)
+- **Packet Rate Bonus**: Packets per second × 1000 (weighted)
+- **Minimum Threshold**: Must have > 1000 bytes of traffic
+- **Monitoring Period**: 10 seconds of traffic analysis across all interfaces
+
+**Example Score Calculation:**
+- **en0**: 5,234,567 bytes + (1,234 packets/sec × 1000) = 6,468,567
+- **utun5**: 1,234,567 bytes + (567 packets/sec × 1000) = 1,801,567
+- **bridge100**: 123,456 bytes + (123 packets/sec × 1000) = 246,456
+
+### 3.4.4 Configuration Population
+
+**Database Configuration Storage:**
+- Stores interface details with type classification
+- Records primary interface selection
+- Sets auto-detection completion flag
+- Preserves settings for future application starts
+
+**Configuration Keys Created:**
+- `interface.{interface_name}`: Serialized interface details
+- `primary_interface`: Name of primary interface (e.g., "en0")
+- `auto_detection_completed`: Completion flag ("true"/"false")
+- `auto_detection_timestamp`: ISO timestamp of completion
+
+## 3.5 Data Collection Architecture Details
+
+### 3.5.1 Background Collection Process
+
+**APScheduler Integration:**
+- Uses `BackgroundScheduler` for continuous operation
+- Configurable polling intervals (default: 30 seconds)
+- Thread-safe job execution with proper locking
+- Automatic retry logic with exponential backoff
+
+**Collection Cycle Workflow:**
+```python
+# Every 30 seconds (configurable)
+scheduler.add_job(
+    func=self._collection_job,
+    trigger=IntervalTrigger(seconds=self.polling_interval),
+    id='network_collection'
+)
+```
+
+**Per-Cycle Process:**
+1. **Interface Discovery**: Get list of monitored interfaces from configuration
+2. **Statistics Collection**: Query `psutil.net_io_counters(pernic=True)`
+3. **Delta Calculation**: Compare current vs previous values
+4. **Rollover Handling**: Handle 64-bit counter overflow
+5. **Database Storage**: Insert traffic data with timestamps
+6. **Statistics Update**: Track collection metrics and errors
+
+### 3.5.2 Traffic Delta Calculation
+
+**Previous Data Storage:**
+```python
+@dataclass
+class InterfaceData:
+    rx_bytes: int = 0
+    tx_bytes: int = 0
+    rx_packets: int = 0
+    tx_packets: int = 0
+    timestamp: Optional[datetime] = None
+```
+
+**Delta Calculation Logic:**
+```python
+def _calculate_deltas(self, interface_name: str, current_stats: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    # Get previous collection data
+    prev_data = self._previous_data.get(interface_name)
+
+    # Calculate time delta
+    time_delta = (current_time - prev_data.timestamp).total_seconds()
+
+    # Calculate byte deltas with rollover handling
+    rx_bytes_delta = self._calculate_counter_delta(prev_data.rx_bytes, current_stats['rx_bytes'])
+    tx_bytes_delta = self._calculate_counter_delta(prev_data.tx_bytes, current_stats['tx_bytes'])
+
+    # Calculate packet deltas with rollover handling
+    rx_packets_delta = self._calculate_counter_delta(prev_data.rx_packets, current_stats['rx_packets'])
+    tx_packets_delta = self._calculate_counter_delta(prev_data.tx_packets, current_stats['tx_packets'])
+```
+
+**Counter Rollover Handling:**
+```python
+def _calculate_counter_delta(self, previous: int, current: int) -> int:
+    if current >= previous:
+        return current - previous
+    else:
+        # Counter rollover detected (64-bit counters)
+        max_counter_value = 2**64 - 1
+        return (max_counter_value - previous) + current
+```
+
+### 3.5.3 Collection Statistics and Monitoring
+
+**Real-Time Metrics Tracking:**
+```python
+@dataclass
+class CollectionStats:
+    total_polls: int = 0
+    successful_polls: int = 0
+    failed_polls: int = 0
+    interfaces_monitored: int = 0
+    last_poll_time: Optional[datetime] = None
+    last_successful_poll: Optional[datetime] = None
+    total_errors: int = 0
+    consecutive_failures: int = 0
+    start_time: Optional[datetime] = None
+```
+
+**Error Handling Strategy:**
+- Individual interface failures don't stop collection
+- Automatic retry with configurable attempts (default: 3)
+- Exponential backoff between retries (default: 1.0 seconds)
+- Comprehensive error logging and categorization
+- Graceful degradation with partial failures
+
+### 3.5.4 Database Storage Optimization
+
+**Batch Processing:**
+- Collects data for all interfaces in single cycle
+- Batch database insertions for efficiency
+- Connection pooling with context managers
+- Transaction rollback on failures
+
+**Index Optimization:**
+```sql
+-- Optimized for common query patterns
+CREATE INDEX IF NOT EXISTS idx_traffic_data_timestamp ON traffic_data(timestamp);
+CREATE INDEX IF NOT EXISTS idx_traffic_data_interface ON traffic_data(interface_name);
+CREATE INDEX IF NOT EXISTS idx_configuration_key ON configuration(key);
+```
+
+**Storage Format:**
+- ISO 8601 timestamps for cross-platform compatibility
+- Integer storage for byte/packet counters
+- Automatic record ID generation
+- Creation timestamp tracking
 
 ## 4. Technology Stack
 
