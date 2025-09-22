@@ -553,7 +553,7 @@ Docker Container
 ├── FastAPI Application (Port 8000)
 ├── APScheduler (Background)
 ├── SQLite Database (netpulse.db)
-└── Static Web Assets (Future)
+└── Static Web Assets (HTML, CSS, JS)
 ```
 
 **Volume Mounts:**
@@ -696,9 +696,9 @@ Main Process (FastAPI)
 - [x] Comprehensive error handling
 
 **Milestone 3 (Frontend):**
-- [ ] Web-based dashboard
+- [ ] Web-based dashboard using Bootstrap 5
 - [ ] Real-time data visualization with Chart.js
-- [ ] Interactive configuration UI
+- [ ] Interactive configuration UI with Bootstrap components
 - [ ] Multi-interface support
 - [ ] Responsive design
 

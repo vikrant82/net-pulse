@@ -63,40 +63,42 @@ Excellent. Here is the updated project plan for Net-Pulse, incorporating the psu
 
 ### **Milestone 3: Frontend - Visualization Dashboard**
 
-**Goal:** Create the primary user-facing dashboard for viewing network traffic.
+**Goal:** Create the primary user-facing dashboard for viewing network traffic using Bootstrap 5 and Chart.js.
 
 * **3.1: Frontend Scaffolding:**
-    * Initialize a Svelte project inside a `frontend/` subdirectory.
+    * Create a `frontend/` directory to hold static assets (`index.html`, CSS, JS).
+    * Integrate Bootstrap 5 and a modern theme.
     * Install `chart.js`.
 
 * **3.2: UI Layout:**
-    * Build the main dashboard page layout with a placeholder for the chart and the two control sliders ("Time Window" and "Grouping").
+    * Build the main dashboard page layout using Bootstrap components.
+    * Include a placeholder for the chart and controls for "Time Window" and "Grouping".
 
 * **3.3: API Integration & Charting:**
-    * Implement the JavaScript logic to call the `/api/traffic` endpoint.
-    * Render the response data onto a Chart.js line chart with distinct series for RX and TX traffic.
-    * Hook the sliders up to trigger new API calls and redraw the chart on value changes.
+    * Implement vanilla JavaScript logic to call the `/api/traffic` endpoint.
+    * Render the response data onto a Chart.js line chart.
+    * Hook up controls to trigger new API calls and redraw the chart.
 
-* **✅ Outcome:** A functional web interface where a user can view the traffic graph for the default interface and dynamically adjust the time window and data granularity.
+* **✅ Outcome:** A functional, modern-looking web interface where a user can view the traffic graph and dynamically adjust the view.
 
 ---
 
 ### **Milestone 4: Frontend - Configuration UI**
 
-**Goal:** Empower the user to configure the application directly from the web interface.
+**Goal:** Empower the user to configure the application directly from the web interface using Bootstrap components.
 
 * **4.1: Settings UI Component:**
-    * Create a "Settings" page or modal.
+    * Create a "Settings" page or modal using Bootstrap components.
     * On load, this component will fetch data from both `/api/interfaces` and `/api/config/monitored_interfaces`.
 
 * **4.2: Interactive Selection:**
-    * Display the full list of interfaces discovered by psutil with checkboxes, ensuring the currently monitored ones are pre-selected.
+    * Use Bootstrap forms to display the list of available interfaces with checkboxes.
     * Implement a "Save" button that sends the new selection to the `POST /api/config/monitored_interfaces` endpoint.
 
 * **4.3: Dashboard Enhancement:**
-    * Update the main dashboard to gracefully handle multiple monitored interfaces (e.g., add a dropdown to switch the view between interfaces).
+    * Update the main dashboard to handle multiple monitored interfaces, perhaps using a Bootstrap dropdown to switch between them.
 
-* **✅ Outcome:** A fully interactive web app. Users can now both view traffic and configure which interfaces to monitor without any manual intervention.
+* **✅ Outcome:** A fully interactive web app using Bootstrap. Users can view traffic and configure monitored interfaces.
 
 ---
 
@@ -105,7 +107,7 @@ Excellent. Here is the updated project plan for Net-Pulse, incorporating the psu
 **Goal:** Package the entire application for simple, one-command deployment.
 
 * **5.1: Dockerization:**
-    * Write a multi-stage `Dockerfile` that first builds the Svelte frontend and then builds the Python application, copying the compiled assets to be served by FastAPI.
+    * Write a `Dockerfile` that builds the Python application and copies the static frontend assets (`index.html`, CSS, JS) to be served by FastAPI.
 
 * **5.2: Compose for Deployment:**
     * Create a `docker-compose.yml` that defines the Net-Pulse service, maps the port, and mounts a volume for `netpulse.db` to ensure data persistence across container restarts.

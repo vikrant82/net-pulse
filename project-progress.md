@@ -55,18 +55,18 @@ Net-Pulse has successfully completed **Milestone 1** (Backend Core - Data Collec
 **Status**: 0% Complete
 
 **Planned Features:**
-- [ ] Svelte frontend application
+- [ ] Bootstrap 5 frontend application
 - [ ] Chart.js integration for data visualization
 - [ ] Interactive time window and grouping controls
-- [ ] Real-time data updates
+- [ ] Real-time data updates via vanilla JavaScript
 
 ### 📋 Milestone 4: Frontend - Configuration UI (PENDING)
 
 **Status**: 0% Complete
 
 **Planned Features:**
-- [ ] Settings page/modal for interface configuration
-- [ ] Interactive interface selection
+- [ ] Settings page/modal using Bootstrap components
+- [ ] Interactive interface selection with Bootstrap forms
 - [ ] Configuration persistence
 - [ ] Multi-interface dashboard support
 
@@ -259,22 +259,22 @@ The backend foundation is complete and stable. The project is **ready to move fo
 #### 1. Frontend Development (Milestone 3) 🎨
 **Priority**: High
 **Status**: Ready to Start
-**Effort**: 2-3 weeks
+**Effort**: 1-2 weeks
 **Tasks**:
-- Set up Svelte frontend project structure
-- Implement Chart.js integration for data visualization
-- Create interactive dashboard with real-time updates
-- Add time window and grouping controls
-- Implement responsive design for multiple screen sizes
+- Set up static frontend with Bootstrap 5 and a modern theme.
+- Implement Chart.js integration for data visualization.
+- Create interactive dashboard with real-time updates using vanilla JavaScript.
+- Add time window and grouping controls.
+- Implement responsive design for multiple screen sizes.
 
 #### 2. Configuration UI (Milestone 4) ⚙️
 **Priority**: High
-**Effort**: 1-2 weeks
+**Effort**: 1 week
 **Tasks**:
-- Create settings page/modal for interface configuration
-- Implement interactive interface selection
-- Add configuration persistence
-- Support multi-interface dashboard views
+- Create settings page/modal for interface configuration using Bootstrap components.
+- Implement interactive interface selection with Bootstrap forms.
+- Add configuration persistence.
+- Support multi-interface dashboard views.
 
 ### 📦 Medium-term Goals (After Frontend)
 

@@ -23,7 +23,7 @@ The system is composed of four main components designed to run within a single D
     * Scheduler: **apscheduler**
     * System Monitoring: **psutil** (cross-platform network interface detection and traffic monitoring)
     * Database: **sqlite3**
-* **Frontend**: **Svelte**
+* **Frontend**: **Bootstrap 5** and **Vanilla JavaScript**
     * Charting Library: **Chart.js**
 * **Deployment**: **Docker** & **Docker Compose**
 
