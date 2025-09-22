@@ -119,3 +119,22 @@ graph TD
     - **Collection Interval Input:** A number input to set the polling interval.
         - **Functionality:** Allows users to change the data collection frequency.
         - **API:** `GET /api/config/collection-interval`, `PUT /api/config/collection-interval`
+
+## 3. Data Fetching Strategy
+
+- **Live Speed Indicator:**
+  - **Frequency:** Every **3 seconds** (configurable, stored in `localStorage`).
+  - **Endpoint:** `GET /api/traffic/latest`
+
+- **Main Traffic Chart & Information Pane:**
+  - **Frequency:** Every **30 seconds** (configurable, stored in `localStorage`).
+  - **Endpoints:** All other data-fetching endpoints.
+
+## 4. UI Refresh and Loading Strategy
+
+- **Asynchronous Updates:** All data refreshes will happen in the background without full-page reloads.
+- **Smooth Chart Transitions:** Chart.js's internal update methods will be used to animate chart changes smoothly.
+- **Loading Indicators:**
+    - **Initial Load:** A spinner will be shown in the chart area.
+    - **Background Refresh:** A subtle spinning icon will appear in the corner of the chart card during background updates.
+- **Error Handling:** In case of an API failure, a non-intrusive toast notification will be shown, and the UI will continue to function with the last known data.
