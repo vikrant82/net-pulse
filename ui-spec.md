@@ -15,14 +15,15 @@ graph TD
 
     subgraph "A [Top Navbar]"
         A1["Net-Pulse" Brand]
-        A2[Collector Status: Green Dot 'Running']
+        A2[Collector Status]
         A3[Settings Button]
     end
 
     subgraph "B [Main Content Area]"
         C[Collector Controls]
         D[Traffic Chart]
-        E[Chart Controls]
+        E[Chart Controls & Export]
+        J[Live Speed Indicator]
         I[Information Pane]
     end
     
@@ -43,7 +44,7 @@ graph TD
         D1[Chart.js Canvas]
     end
 
-    subgraph "E [Chart Controls]"
+    subgraph "E [Chart Controls & Export]"
         E1[Time Window Slider]
         E2[Grouping Interval Dropdown]
         E3[Export Data Button]
@@ -52,6 +53,7 @@ graph TD
     subgraph "Settings Modal (hidden by default)"
         F[Modal Header: 'Settings']
         G[Interface Selection Form]
+        K[Collection Interval Input]
         H[Modal Footer]
     end
 
