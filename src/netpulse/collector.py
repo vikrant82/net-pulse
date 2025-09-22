@@ -575,6 +575,16 @@ class NetworkDataCollector:
         except DatabaseError as e:
             logger.error(f"Failed to get monitored interfaces from config: {e}")
 
+        # If no interfaces configured, try to get all available interfaces
+        try:
+            all_stats = get_all_interface_stats()
+            available_interfaces = list(all_stats.keys())
+            if available_interfaces:
+                logger.info(f"No monitored interfaces configured, using all available: {available_interfaces}")
+                return available_interfaces
+        except NetworkError as e:
+            logger.error(f"Failed to get all interface stats: {e}")
+
         return []
 
     def _get_current_config(self) -> Dict[str, Any]:

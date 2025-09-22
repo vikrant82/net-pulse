@@ -314,6 +314,122 @@ def set_configuration_value(key: str, value: str) -> None:
         raise DatabaseError(f"Failed to set configuration value: {e}")
 
 
+def get_aggregated_traffic_data(
+    start_time: str,
+    data_points: int = 50,
+    interface_name: Optional[str] = None,
+    end_time: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve aggregated traffic data grouped into exactly N data points.
+
+    This function uses SQL aggregation to efficiently group raw data points
+    into the requested number of aggregated points, leveraging database capabilities
+    instead of client-side aggregation.
+
+    Args:
+        start_time: Start time filter (ISO format string like '1h', '6h', '24h', '7d', '30d')
+        data_points: Number of aggregated data points to return (default: 50)
+        interface_name: Optional interface name filter
+        end_time: Optional end time filter (ISO format)
+
+    Returns:
+        List[Dict[str, Any]]: List of aggregated traffic data points
+
+    Raises:
+        DatabaseError: If query fails
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # Calculate time window based on start_time parameter
+            time_windows = {
+                '1h': "datetime('now', '-1 hour')",
+                '6h': "datetime('now', '-6 hours')",
+                '24h': "datetime('now', '-24 hours')",
+                '7d': "datetime('now', '-7 days')",
+                '30d': "datetime('now', '-30 days')"
+            }
+
+            time_filter = time_windows.get(start_time, "datetime('now', '-24 hours')")
+
+            # Build base query with time and interface filters
+            query = """
+                WITH ranked_data AS (
+                    SELECT
+                        *,
+                        ROW_NUMBER() OVER (
+                            ORDER BY timestamp ASC
+                        ) as row_num,
+                        COUNT(*) OVER () as total_rows
+                    FROM traffic_data
+                    WHERE timestamp >= {time_filter}
+            """
+
+            params = []
+
+            if interface_name:
+                query += " AND interface_name = ?"
+                params.append(interface_name)
+
+            if end_time:
+                query += " AND timestamp <= ?"
+                params.append(end_time)
+
+            query += """
+                ),
+                bucket_size AS (
+                    SELECT
+                        CAST(
+                            (SELECT COUNT(*) FROM ranked_data) / {data_points}
+                            AS INTEGER
+                        ) as size
+                )
+                SELECT
+                    AVG(rd.rx_bytes) as avg_rx_bytes,
+                    AVG(rd.tx_bytes) as avg_tx_bytes,
+                    AVG(rd.rx_packets) as avg_rx_packets,
+                    AVG(rd.tx_packets) as avg_tx_packets,
+                    rd.interface_name,
+                    rd.timestamp as bucket_timestamp
+                FROM ranked_data rd
+                CROSS JOIN bucket_size bs
+                WHERE (rd.row_num - 1) / bs.size < {data_points}
+                GROUP BY
+                    (rd.row_num - 1) / bs.size,
+                    rd.interface_name
+                ORDER BY bucket_timestamp ASC
+                LIMIT {data_points}
+            """
+
+            # Replace placeholders with actual values
+            query = query.replace('{time_filter}', time_filter)
+            query = query.replace('{data_points}', str(data_points))
+
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+
+            # Convert rows to list of dictionaries
+            result = []
+            for row in rows:
+                result.append({
+                    'timestamp': row['bucket_timestamp'],
+                    'interface_name': row['interface_name'],
+                    'rx_bytes': int(row['avg_rx_bytes']) if row['avg_rx_bytes'] else 0,
+                    'tx_bytes': int(row['avg_tx_bytes']) if row['avg_tx_bytes'] else 0,
+                    'rx_packets': int(row['avg_rx_packets']) if row['avg_rx_packets'] else 0,
+                    'tx_packets': int(row['avg_tx_packets']) if row['avg_tx_packets'] else 0
+                })
+
+            logger.info(f"Retrieved {len(result)} aggregated traffic data points for {start_time}")
+            return result
+
+    except sqlite3.Error as e:
+        logger.error(f"Failed to retrieve aggregated traffic data: {e}")
+        raise DatabaseError(f"Failed to retrieve aggregated traffic data: {e}")
+
+
 def get_database_stats() -> Dict[str, Any]:
     """
     Get database statistics for monitoring.
