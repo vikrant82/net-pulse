@@ -382,7 +382,7 @@ class TestNetworkDataCollectorInitialization:
         """Test successful collector initialization."""
         collector = NetworkDataCollector()
 
-        assert collector.polling_interval == 30
+        assert collector.polling_interval == 60
         assert collector.max_retries == 3
         assert collector.retry_delay == 1.0
         assert not collector._is_running

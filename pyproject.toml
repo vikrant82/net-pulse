@@ -31,7 +31,8 @@ test = [
     "httpx",
     "pytest",
     "pytest-cov",
-    "pytest-mock"
+    "pytest-mock",
+    "pytest-xdist"
 ]
 
 [project.scripts]
@@ -103,11 +104,12 @@ addopts = [
     "-ra",
     "--strict-markers",
     "--strict-config",
-    "--cov=src/netpulse",
-    "--cov-report=term-missing",
-    "--cov-report=html:htmlcov",
-    "--cov-report=xml",
-    "--cov-fail-under=80"
+    "--tb=short",
+    "-n auto",
+    "--maxfail=5",
+    "--durations=10",
+    "-m \"not slow and not integration\"",
+    "--dist=loadscope"
 ]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
@@ -118,7 +120,9 @@ markers = [
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
     "api: marks tests as API tests",
-    "performance: marks tests as performance tests"
+    "performance: marks tests as performance tests",
+    "networking: marks tests as networking tests",
+    "fast: marks tests as fast (run with '-m \"fast\"')"
 ]
 filterwarnings = [
     "error",

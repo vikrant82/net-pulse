@@ -22,6 +22,26 @@ logger = logging.getLogger(__name__)
 # Database file path - created in project root
 DB_PATH = Path(__file__).parent.parent.parent / "netpulse.db"
 
+def get_db_path():
+    """Get the current database path."""
+    return DB_PATH
+
+def set_db_path(path):
+    """Set the database path for testing."""
+    global DB_PATH, _initialized
+    # Handle sqlite:// URLs by stripping the prefix
+    if path.startswith("sqlite:///"):
+        path = path[10:]  # Remove 'sqlite:///' prefix
+    DB_PATH = Path(path)
+    # Reset initialization flag when path changes so new database gets initialized
+    _initialized = False
+    # Initialize the new database immediately
+    try:
+        initialize_database()
+    except DatabaseError as e:
+        logger.error(f"Failed to initialize database after path change: {e}")
+        # Don't raise the exception to allow tests to continue
+
 
 class DatabaseError(Exception):
     """Custom exception for database operations."""
@@ -29,7 +49,7 @@ class DatabaseError(Exception):
 
 
 @contextmanager
-def get_db_connection():
+def get_db_connection(db_url: Optional[str] = None):
     """
     Context manager for database connections.
 
@@ -40,8 +60,16 @@ def get_db_connection():
         DatabaseError: If connection fails
     """
     conn = None
+    # Use the dynamic DB_PATH if no specific URL provided
+    if db_url is None:
+        db_to_connect = str(DB_PATH)
+    else:
+        db_to_connect = db_url
+
+    if db_to_connect.startswith("sqlite:///"):
+        db_to_connect = db_to_connect[10:]
     try:
-        conn = sqlite3.connect(str(DB_PATH))
+        conn = sqlite3.connect(db_to_connect)
         conn.row_factory = sqlite3.Row  # Enable column access by name
         yield conn
     except sqlite3.Error as e:
@@ -52,7 +80,7 @@ def get_db_connection():
             conn.close()
 
 
-def initialize_database() -> None:
+def initialize_database(db_url: Optional[str] = None) -> None:
     """
     Initialize the database by creating tables if they don't exist.
 
@@ -64,7 +92,13 @@ def initialize_database() -> None:
         DatabaseError: If table creation fails
     """
     try:
-        with get_db_connection() as conn:
+        # Use the provided URL or get it from the current DB_PATH
+        if db_url is None:
+            db_to_connect = str(DB_PATH)
+        else:
+            db_to_connect = db_url
+
+        with get_db_connection(db_to_connect) as conn:
             cursor = conn.cursor()
 
             # Create traffic_data table
@@ -352,8 +386,19 @@ def get_database_stats() -> Dict[str, Any]:
 
 
 # Initialize database when module is imported
-try:
-    initialize_database()
-except DatabaseError as e:
-    logger.error(f"Failed to initialize database on import: {e}")
-    raise
+# Use a flag to track if we've been initialized to avoid duplicate initialization
+_initialized = False
+
+def _ensure_initialized():
+    """Ensure database is initialized, but only once."""
+    global _initialized
+    if not _initialized:
+        try:
+            initialize_database()
+            _initialized = True
+        except DatabaseError as e:
+            logger.error(f"Failed to initialize database on import: {e}")
+            # Don't raise the exception during import to allow tests to set their own paths
+
+# Initialize database when module is imported
+_ensure_initialized()

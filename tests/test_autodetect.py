@@ -30,7 +30,7 @@ class TestInterfaceAnalyzer:
     @pytest.fixture
     def analyzer(self):
         """Create InterfaceAnalyzer instance for testing."""
-        return InterfaceAnalyzer()
+        return InterfaceAnalyzer(sample_interval=0.01)
 
     def test_analyzer_initialization(self, analyzer):
         """Test InterfaceAnalyzer initialization."""
@@ -38,7 +38,7 @@ class TestInterfaceAnalyzer:
         assert analyzer.network_module is not None
         assert analyzer.database_module is not None
         assert analyzer._monitoring_duration == 10
-        assert analyzer._sample_interval == 1
+        assert analyzer._sample_interval == 0.01
 
     def test_is_valid_interface_filtering(self, analyzer):
         """Test interface validation logic."""

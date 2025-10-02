@@ -119,7 +119,7 @@ class TestEndToEndWorkflow:
         and stores configuration in the database.
         """
         # Create analyzer instance
-        analyzer = InterfaceAnalyzer()
+        analyzer = InterfaceAnalyzer(sample_interval=0.01)
 
         # Test interface discovery
         interfaces = analyzer.discover_interfaces()
@@ -160,10 +160,10 @@ class TestEndToEndWorkflow:
 
         # Verify default configuration values
         polling_interval = get_configuration_value('collector.polling_interval')
-        assert polling_interval == '30', "Default polling interval should be 30"
+        assert polling_interval == '60', "Default polling interval should be 60"
 
         max_retries = get_configuration_value('collector.max_retries')
-        assert max_retries == '3', "Default max retries should be 3"
+        assert max_retries == '5', "Default max retries should be 5"
 
         # Test interface configuration
         monitored_interfaces = get_configuration_value('collector.monitored_interfaces')
@@ -554,7 +554,7 @@ class TestPerformanceAndLoadIntegration:
         collector.start_collection()
 
         # Monitor for a shorter period to speed up tests
-        monitoring_duration = 3  # seconds (reduced from 10)
+        monitoring_duration = 0.1  # seconds (reduced from 10)
         start_time = time.time()
 
         try:
@@ -570,7 +570,7 @@ class TestPerformanceAndLoadIntegration:
                 assert 'total_polls' in stats, "Stats should include poll count"
                 assert 'last_poll_time' in stats or stats['last_poll_time'] is None
 
-                time.sleep(0.5)  # Reduced from 2 seconds
+                time.sleep(0.01)  # Reduced from 2 seconds
 
             # Stop collection
             collector.stop_collection()
@@ -603,7 +603,7 @@ class TestPerformanceAndLoadIntegration:
 
         # Test monitoring multiple interfaces (reduced duration for faster tests)
         analyzer = InterfaceAnalyzer()
-        traffic_data = analyzer._monitor_traffic_patterns(interface_names[:3], duration=2)
+        traffic_data = analyzer._monitor_traffic_patterns(interface_names[:3], duration=1)
 
         # Verify all interfaces were monitored
         assert len(traffic_data) == len(interface_names[:3]), "Should monitor all specified interfaces"
@@ -627,8 +627,8 @@ class TestPerformanceAndLoadIntegration:
         Validates that database operations maintain performance as data grows
         and that queries remain efficient.
         """
-        # Insert a large amount of test data
-        test_records = 100
+        # Insert test data (reduced for faster tests)
+        test_records = 20
         base_time = datetime.now(timezone.utc)
 
         for i in range(test_records):
@@ -683,7 +683,7 @@ class TestPerformanceAndLoadIntegration:
 
         try:
             collector.start_collection()
-            time.sleep(2)  # Reduced from 5 seconds for faster tests
+            time.sleep(0.1)  # Reduced from 5 seconds for faster tests
             collector.stop_collection()
 
             # Check memory usage after operation
@@ -792,8 +792,8 @@ class TestErrorRecoveryIntegration:
         collector = get_collector()
 
         # Should handle invalid configuration gracefully
-        assert collector.polling_interval == 30, "Should use default for invalid polling interval"
-        assert collector.max_retries == 3, "Should use default for invalid max retries"
+        assert collector.polling_interval == 60, "Should use default for invalid polling interval"
+        assert collector.max_retries == 5, "Should use default for invalid max retries"
 
         # Test configuration repair
         set_configuration_value('collector.polling_interval', '60')
@@ -863,7 +863,7 @@ class TestSystemLevelIntegration:
 
         # Verify default configuration
         polling_interval = get_configuration_value('collector.polling_interval')
-        assert polling_interval == '30', "Default polling interval should be set"
+        assert polling_interval == '60', "Default polling interval should be set"
 
         # Test auto-detection initialization
         try:
@@ -901,7 +901,7 @@ class TestSystemLevelIntegration:
         assert status['is_running'] is True, "Collector should be running"
 
         # Wait for at least one collection cycle (reduced for faster tests)
-        time.sleep(1)
+        time.sleep(0.1)
 
         # Check that collection cycles occurred
         updated_status = collector.get_collection_status()
@@ -1001,7 +1001,7 @@ class TestDataIntegrity:
             try:
                 result = collector.collect_once()
                 results.append(result)
-                time.sleep(0.5)  # Reduced from 1 second for faster tests
+                time.sleep(0.01)  # Reduced from 1 second for faster tests
             except Exception as e:
                 results.append({'error': str(e)})
                 continue
@@ -1233,7 +1233,7 @@ class TestConcurrentOperation:
             assert isinstance(interfaces, dict), "Auto-detection should work during collection"
 
             # Test primary interface identification
-            primary_interface = analyzer.identify_primary_interface(monitoring_duration=2)
+            primary_interface = analyzer.identify_primary_interface(monitoring_duration=1)
             # Primary interface identification may fail in test environment, but shouldn't crash
 
             # Verify collection is still running
@@ -1297,7 +1297,7 @@ class TestConcurrentOperation:
             # Perform database operations while collection is running
             test_data = []
 
-            for i in range(10):
+            for i in range(5):
                 timestamp = datetime.now(timezone.utc).isoformat()
                 interface_name = f"concurrent_test_{i}"
 

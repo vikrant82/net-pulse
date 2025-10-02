@@ -402,6 +402,9 @@ def create_app() -> FastAPI:
             collector = get_collector()
             monitored_interfaces = collector._get_monitored_interfaces()
             return {"interfaces": monitored_interfaces}
+        except CollectorError as e:
+            logger.error(f"Failed to get monitored interfaces: {e}")
+            raise  # Re-raise the exception to be handled by the global handler
         except Exception as e:
             logger.error(f"Failed to get monitored interfaces: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to retrieve monitored interfaces: {str(e)}")
@@ -453,7 +456,7 @@ def create_app() -> FastAPI:
             logger.info("Fetching collection interval configuration")
             from netpulse.database import get_configuration_value
             interval_str = get_configuration_value('collector.polling_interval')
-            interval = int(interval_str) if interval_str else 30
+            interval = int(interval_str) if interval_str else 60
             return {"collection_interval_seconds": interval}
         except Exception as e:
             logger.error(f"Failed to get collection interval: {e}")
@@ -499,7 +502,7 @@ def create_app() -> FastAPI:
             logger.info("Fetching max retries configuration")
             from netpulse.database import get_configuration_value
             retries_str = get_configuration_value('collector.max_retries')
-            retries = int(retries_str) if retries_str else 3
+            retries = int(retries_str) if retries_str else 5
             return {"max_retries": retries}
         except Exception as e:
             logger.error(f"Failed to get max retries: {e}")
@@ -545,7 +548,7 @@ def create_app() -> FastAPI:
             logger.info("Fetching retry delay configuration")
             from netpulse.database import get_configuration_value
             delay_str = get_configuration_value('collector.retry_delay')
-            delay = float(delay_str) if delay_str else 1.0
+            delay = float(delay_str) if delay_str else 2.0
             return {"retry_delay_seconds": delay}
         except Exception as e:
             logger.error(f"Failed to get retry delay: {e}")
@@ -699,7 +702,7 @@ def create_app() -> FastAPI:
             disk_usage = shutil.disk_usage(".")
 
             metrics = {
-                "cpu_percent": psutil.cpu_percent(interval=1),
+                "cpu_percent": psutil.cpu_percent(),
                 "memory_percent": psutil.virtual_memory().percent,
                 "disk_usage_percent": (disk_usage.used / disk_usage.total) * 100,
                 "network_interfaces_count": len(get_network_interfaces()),
@@ -785,6 +788,7 @@ def main() -> None:
     except Exception as e:
         print(f"Unexpected error during auto-detection (continuing anyway): {e}")
 
+    app = create_app()
     app = create_app()
     uvicorn.run(
         app,

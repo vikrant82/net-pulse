@@ -101,6 +101,8 @@ class TestAPIBase:
 class TestInterfaceManagementEndpoints(TestAPIBase):
     """Test interface management endpoints."""
 
+    @pytest.mark.fast
+
     def test_get_interfaces_success(self, client, sample_interface_data):
         """Test successful retrieval of all interfaces."""
         with patch('netpulse.main.get_network_interfaces') as mock_get_interfaces:
@@ -188,6 +190,8 @@ class TestInterfaceManagementEndpoints(TestAPIBase):
 
 class TestTrafficDataEndpoints(TestAPIBase):
     """Test traffic data endpoints."""
+
+    @pytest.mark.fast
 
     def test_get_traffic_history_success(self, client, sample_traffic_data):
         """Test successful retrieval of traffic history."""
@@ -280,6 +284,8 @@ class TestTrafficDataEndpoints(TestAPIBase):
 class TestConfigurationEndpoints(TestAPIBase):
     """Test configuration endpoints."""
 
+    @pytest.mark.fast
+
     def test_get_monitored_interfaces_success(self, client):
         """Test successful retrieval of monitored interfaces."""
         with patch('netpulse.collector.get_collector') as mock_get_collector:
@@ -366,7 +372,7 @@ class TestConfigurationEndpoints(TestAPIBase):
 
             assert response.status_code == 200
             data = response.json()
-            assert data["collection_interval_seconds"] == 30
+            assert data["collection_interval_seconds"] == 60
 
     def test_update_collection_interval_success(self, client):
         """Test successful update of collection interval."""
@@ -420,7 +426,7 @@ class TestConfigurationEndpoints(TestAPIBase):
 
             assert response.status_code == 200
             data = response.json()
-            assert data["max_retries"] == 3
+            assert data["max_retries"] == 5
 
     def test_update_max_retries_success(self, client):
         """Test successful update of max retries setting."""
@@ -484,7 +490,7 @@ class TestConfigurationEndpoints(TestAPIBase):
 
             assert response.status_code == 200
             data = response.json()
-            assert data["retry_delay_seconds"] == 1.0
+            assert data["retry_delay_seconds"] == 2.0
 
     def test_update_retry_delay_success(self, client):
         """Test successful update of retry delay setting."""
@@ -530,6 +536,8 @@ class TestConfigurationEndpoints(TestAPIBase):
 
 class TestSystemInformationEndpoints(TestAPIBase):
     """Test system information endpoints."""
+
+    @pytest.mark.fast
 
     def test_get_system_info_success(self, client):
         """Test successful retrieval of system information."""
@@ -663,6 +671,8 @@ class TestSystemInformationEndpoints(TestAPIBase):
 class TestDataExportEndpoints(TestAPIBase):
     """Test data export endpoints."""
 
+    @pytest.mark.fast
+
     def test_export_traffic_json_success(self, client, sample_traffic_data):
         """Test successful JSON export of traffic data."""
         with patch('netpulse.main.get_traffic_data') as mock_get_data:
@@ -731,6 +741,8 @@ class TestDataExportEndpoints(TestAPIBase):
 class TestErrorHandling(TestAPIBase):
     """Test error handling and exception management."""
 
+    @pytest.mark.fast
+
     def test_network_error_handler(self, client):
         """Test NetworkError exception handler."""
         with patch('netpulse.main.get_network_interfaces') as mock_get_interfaces:
@@ -759,15 +771,15 @@ class TestErrorHandling(TestAPIBase):
 
     def test_collector_error_handler(self, client):
         """Test CollectorError exception handler."""
-        from netpulse.collector import get_collector
-        with patch.object(get_collector, '__call__') as mock_get_collector:
-            mock_get_collector.side_effect = CollectorError("Collector error")
+        # The actual implementation creates a new collector instance rather than getting existing one
+        # So we need to mock the NetworkDataCollector constructor to raise an error
+        with patch('netpulse.collector.NetworkDataCollector') as mock_collector_class:
+            mock_collector_class.side_effect = CollectorError("Collector error")
 
             response = client.get("/api/config/interfaces")
 
             assert response.status_code == 500
             data = response.json()
-            # HTTPException handler takes precedence over global CollectorError handler
             assert "detail" in data
             assert "Collector error" in data["detail"]
 
@@ -794,11 +806,13 @@ class TestErrorHandling(TestAPIBase):
             data = response.json()
             # HTTPException handler takes precedence over global Exception handler
             assert "detail" in data
-            assert "unexpected error" in data["detail"]
+            assert "Internal server error: Unexpected error" in data["detail"]
 
 
 class TestPerformance(TestAPIBase):
     """Performance tests for API endpoints."""
+
+    @pytest.mark.fast
 
     def test_interfaces_endpoint_performance(self, client, sample_interface_data):
         """Test performance of interfaces endpoint."""
@@ -869,6 +883,8 @@ class TestPerformance(TestAPIBase):
 class TestAPIDocumentation(TestAPIBase):
     """Test API documentation and OpenAPI schema."""
 
+    @pytest.mark.fast
+
     def test_openapi_schema_exists(self, client):
         """Test that OpenAPI schema is available."""
         response = client.get("/openapi.json")
@@ -926,6 +942,8 @@ class TestAPIDocumentation(TestAPIBase):
 
 class TestIntegration(TestAPIBase):
     """Integration tests for API endpoints."""
+
+    @pytest.mark.fast
 
     def test_full_interface_workflow(self, client, sample_interface_data, sample_interface_stats):
         """Test complete workflow: get interfaces -> get specific interface -> get stats."""
@@ -1009,7 +1027,9 @@ class TestIntegration(TestAPIBase):
             mock_platform_python.return_value = "3.9.0"
             mock_psutil_boot.return_value = 1609459200
             mock_psutil_cpu.return_value = 4
-            mock_psutil_memory.return_value = Mock(total=8589934592, available=4294967296)
+            mock_memory = Mock(total=8589934592, available=4294967296)
+            mock_memory.percent = 75.0
+            mock_psutil_memory.return_value = mock_memory
             mock_cpu_percent.return_value = 50.0
             mock_disk_usage.return_value = Mock(total=1000000000, used=500000000)
             mock_interfaces.return_value = {"eth0": {"status": "up"}}

@@ -95,9 +95,9 @@ class NetworkDataCollector:
     """
 
     def __init__(self,
-                 polling_interval: int = 30,
-                 max_retries: int = 3,
-                 retry_delay: float = 1.0):
+                 polling_interval: int = 60,
+                 max_retries: int = 5,
+                 retry_delay: float = 2.0):
         """
         Initialize the NetworkDataCollector.
 
@@ -351,7 +351,12 @@ class NetworkDataCollector:
 
                     if delta_data:
                         # Store in database
-                        self._store_traffic_data(delta_data)
+                        try:
+                            self._store_traffic_data(delta_data)
+                        except DatabaseError as e:
+                            errors.append(f"Failed to store data for {interface_name}: {e}")
+                            logger.error(f"Failed to store data for {interface_name}: {e}")
+                            continue
                         logger.debug(f"Stored data for {interface_name}")
 
                         # Update previous data for next delta calculation
@@ -371,7 +376,12 @@ class NetworkDataCollector:
                             'collection_interval_seconds': 0.0
                         }
                         # Store baseline in database
-                        self._store_traffic_data(baseline_data)
+                        try:
+                            self._store_traffic_data(baseline_data)
+                        except DatabaseError as e:
+                            errors.append(f"Failed to store baseline data for {interface_name}: {e}")
+                            logger.error(f"Failed to store baseline data for {interface_name}: {e}")
+                            continue
                         logger.debug(f"Stored baseline data for {interface_name}")
 
                         # Update previous data for next delta calculation
@@ -625,9 +635,9 @@ def initialize_collector_config() -> None:
     This function should be called during application startup.
     """
     config_defaults = {
-        'collector.polling_interval': '30',
-        'collector.max_retries': '3',
-        'collector.retry_delay': '1.0',
+        'collector.polling_interval': '60',
+        'collector.max_retries': '5',
+        'collector.retry_delay': '2.0',
         'collector.monitored_interfaces': '',  # Empty means monitor all interfaces
     }
 
@@ -665,3 +675,8 @@ def get_collector() -> NetworkDataCollector:
                     raise
 
     return _collector_instance
+
+def reset_collector():
+    """Reset the global collector instance."""
+    global _collector_instance
+    _collector_instance = None

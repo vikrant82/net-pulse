@@ -42,13 +42,13 @@ class InterfaceAnalyzer:
     configuration management for automatic system setup.
     """
 
-    def __init__(self):
+    def __init__(self, sample_interval: float = 1.0):
         """Initialize the InterfaceAnalyzer."""
         self.network_module = network
         self.database_module = database
         self._traffic_samples = []
         self._monitoring_duration = 10  # seconds
-        self._sample_interval = 1  # seconds
+        self._sample_interval = sample_interval  # seconds
 
     def discover_interfaces(self) -> Dict[str, Dict[str, Any]]:
         """
@@ -162,7 +162,7 @@ class InterfaceAnalyzer:
                         'rx_packets': stats['rx_packets'],
                         'tx_packets': stats['tx_packets']
                     })
-                    time.sleep(1)  # Sample every second
+                    time.sleep(self._sample_interval)  # Sample every second
                 except Exception as e:
                     logger.debug(f"Failed to get stats during analysis: {e}")
                     continue
